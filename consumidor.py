@@ -1,21 +1,51 @@
+#librerías para la parte gráfica
 import tkinter as tk
 from tkinter import ttk
+
+#se llama la función de la conexión con rabbit, para utilizar el canal
 from conexion import conectar_rabbitmq
+
+#llamar la función de publicar el evento creado en "productor"
 from productor import publicar_evento
+
+#Se crea un hilo separado para que Rabbit escuche mensajes mientras Tkinter funciona
 import threading
 
+
+#Lista que va a mostrar en un menú de la interfaz
 CULTIVOS = ["Fresa", "Papa", "Cebolla", "Cacao"]
 
+
+"""
+def publicar_desde_gui(cultivo)
+Función que, con ayuda del método "publicar_evento", ubicado en el .py "productor",
+publica un recordatorio en la cola "recordatorios" en RabbitMQ según el tipo de cultivo
+que el usuario haya seleccionado
+"""
 def publicar_desde_gui(cultivo):
     mensaje = f"Aplicar fertilizante en el cultivo de {cultivo.lower()}"
     publicar_evento(mensaje)
 
+
+"""
+def escuchar_resultados(caja_texto)
+Función que se encarga de escuchar las notificaciones almacenadas en la cola "resultados" 
+(cola creada en el .py productor) y posteriormente las muestra en la interfaz.
+- La variable "caja_texto" que utiliza es donde se insertarán las notificaciones
+"""
 def escuchar_resultados(caja_texto):
+
+    """
+    def mostrar_noti(ch, method, properties, body)
+    Función que recibe la notificación procesada desde Rabbit y la inserta en
+    la caja de texto
+    """
     def mostrar_noti(ch, method, properties, body):
         notificacion = body.decode()
         caja_texto.insert(tk.END, f"[Web AgroGuide] {notificacion}\n")
         caja_texto.see(tk.END)
 
+    #Se crea la conexión al rabbit y se escucha la cola "resultados"
     canal = conectar_rabbitmq()
     canal.queue_declare(queue='resultados')
     canal.basic_consume(queue='resultados',
@@ -24,34 +54,50 @@ def escuchar_resultados(caja_texto):
     print("[Web AgroGuide] Esperando notificaciones...")
     canal.start_consuming()
 
+
+"""
+def iniciar_gui(caja_texto)
+Función donde se inicializa la interfaz de AgroGuide
+"""
 def iniciar_gui():
+
+    #Parámetros de la ventana inicial y principal
     ventana = tk.Tk()
     ventana.title("AgroGuide Notificador")
     ventana.geometry("500x400")
     ventana.configure(bg="#f0f8f5")
 
+    #Label con la selección del cultivo
     etiqueta = tk.Label(ventana, text="Selecciona el cultivo:", font=("Arial", 12), bg="#f0f8f5")
     etiqueta.pack(pady=10)
 
+    #Implementación del combobox con las opciones de la lista "CULTIVO" creada al comienzo
     cultivo_var = tk.StringVar()
     selector = ttk.Combobox(ventana, textvariable=cultivo_var, values=CULTIVOS, state="readonly", font=("Arial", 11))
     selector.pack(pady=5)
     selector.current(0)
 
-    boton_publicar = tk.Button(ventana, text="📤 Publicar Recordatorio", font=("Arial", 11), bg="#d0f0c0",
+    #Botón de publicación 
+    boton_publicar = tk.Button(ventana, text="Publicar Recordatorio", font=("Arial", 11), bg="#d0f0c0",
                                command=lambda: publicar_desde_gui(cultivo_var.get()))
     boton_publicar.pack(pady=10)
 
-    etiqueta_noti = tk.Label(ventana, text="📥 Notificaciones recibidas:", font=("Arial", 12), bg="#f0f8f5")
+    #Label donde se mostrarán las notificaciones recibidas desde la función "escuchar_resultados"
+    etiqueta_noti = tk.Label(ventana, text="Notificaciones recibidas:", font=("Arial", 12), bg="#f0f8f5")
     etiqueta_noti.pack(pady=10)
 
     caja_texto = tk.Text(ventana, height=10, width=60, font=("Arial", 10))
     caja_texto.pack(pady=5)
 
+    """
+    Aquí es donde se crea el hilo de la libreria threading, para evitar que la interfaz se
+    congele mientras se hace el ciclo de envíos y escucha de conectar_rabbitmq
+    """
     hilo_consumidor = threading.Thread(target=escuchar_resultados, args=(caja_texto,), daemon=True)
     hilo_consumidor.start()
 
     ventana.mainloop()
 
+#Ejecución
 if __name__ == "__main__":
     iniciar_gui()
